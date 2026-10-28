@@ -7,6 +7,7 @@ Nécessite ffmpeg et ffprobe dans le PATH. Coordonnées en pixels lues sur une i
 
 Usage :
     py track.py lancer.mp4 --color "#ff8000" --origin 350,440 --ref 100,460,600,460 --ref-length 1.0 -o lancer.csv
+    py track.py lancer.mp4 ...mêmes options... --overlay sim.csv -o superposition.mp4
 """
 import argparse
 import json
@@ -52,20 +53,51 @@ def find_ball(frame, color, tol=60, min_px=20):
     return cx, cy, np.sqrt(sizes[k] / np.pi)
 
 
-def track(path, color, origin, ref, ref_length, tol=60):
-    """Trajectoire (t, x, y) en mètres. y = 0 quand la bille roule au sol, x orienté vers le point d'arrivée."""
+def detect(path, color, tol=60):
+    """Instants (s), centres et rayons (px) de la bille sur les images où elle est trouvée."""
     w, h, fps = probe(path)
     hits = [(i / fps, *b) for i, f in enumerate(frames(path, w, h)) if (b := find_ball(f, color, tol))]
     if len(hits) < 10:
         raise SystemExit(f"bille trouvée sur {len(hits)} image(s) seulement : vérifier --color et --tol")
-    t, cx, cy, r = np.array(hits).T
+    return np.array(hits).T
+
+
+def _frame(cx, r, ref, ref_length):
+    """Échelle (px/m), sens de x (la bille peut aller vers la gauche de l'image) et rayon médian (px)."""
     # shortcut: suppose la caméra de face et horizontale (pas de correction de perspective) ; calibrer la caméra si le plan du mouvement est vu de biais
     scale = np.hypot(ref[2] - ref[0], ref[3] - ref[1]) / ref_length
-    x = (cx - origin[0]) / scale
-    y = (origin[1] - cy) / scale - np.median(r) / scale
-    if x[-1] < x[0]:  # la bille va vers la gauche de l'image
-        x = -x
-    return t, x, y
+    return scale, 1 if cx[-1] >= cx[0] else -1, np.median(r)
+
+
+def track(path, color, origin, ref, ref_length, tol=60):
+    """Trajectoire (t, x, y) en mètres. y = 0 quand la bille roule au sol, x orienté vers le point d'arrivée."""
+    t, cx, cy, r = detect(path, color, tol)
+    scale, sign, rm = _frame(cx, r, ref, ref_length)
+    return t, sign * (cx - origin[0]) / scale, (origin[1] - cy - rm) / scale
+
+
+def overlay(path, out, color, origin, ref, ref_length, sim, tol=60):
+    """Réécrit la vidéo avec la traînée observée (vert) et simulée (rouge) jusqu'à l'instant de chaque image.
+
+    sim : (t, x, y) en mètres, dans le repère de track().
+    """
+    t, cx, cy, r = detect(path, color, tol)
+    scale, sign, rm = _frame(cx, r, ref, ref_length)
+    st, sx, sy = sim
+    sim_px = origin[0] + sign * sx * scale, origin[1] - sy * scale - rm
+    w, h, fps = probe(path)
+    p = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
+                          "-r", str(fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", out],
+                         stdin=subprocess.PIPE)
+    for i, f in enumerate(frames(path, w, h)):
+        f, now = f.copy(), i / fps + 1e-6
+        for ts, (us, vs), col in [(t, (cx, cy), (0, 255, 0)), (st, sim_px, (255, 0, 0))]:
+            for u, v in zip(us[ts <= now].astype(int), vs[ts <= now].astype(int)):
+                f[max(v - 2, 0):v + 3, max(u - 2, 0):u + 3] = col
+        p.stdin.write(f.tobytes())
+    p.stdin.close()
+    if p.wait():
+        raise SystemExit(f"ffmpeg n'a pas pu écrire {out}")
 
 
 def main():
@@ -76,7 +108,8 @@ def main():
     ap.add_argument("--origin", required=True, help="px,py")
     ap.add_argument("--ref", required=True, help="x1,y1,x2,y2 en pixels")
     ap.add_argument("--ref-length", type=float, required=True, help="distance réelle entre les deux points (m)")
-    ap.add_argument("-o", "--out", required=True, help="CSV de sortie")
+    ap.add_argument("--overlay", metavar="SIM_CSV", help="écrit dans -o la vidéo avec cette trajectoire simulée superposée")
+    ap.add_argument("-o", "--out", required=True, help="CSV de sortie, ou vidéo .mp4 avec --overlay")
     a = ap.parse_args()
     c = a.color.lstrip("#")
     if len(c) != 6:
@@ -86,6 +119,11 @@ def main():
     ref = [float(v) for v in a.ref.split(",")]
     if len(origin) != 2 or len(ref) != 4 or a.ref_length <= 0 or ref[:2] == ref[2:]:
         raise SystemExit("--origin px,py ; --ref x1,y1,x2,y2 (deux points distincts) ; --ref-length > 0")
+    if a.overlay:
+        sim = np.loadtxt(a.overlay, delimiter=",", skiprows=1, ndmin=2).T
+        overlay(a.video, a.out, color, origin, ref, a.ref_length, sim, a.tol)
+        print(f"vidéo superposée écrite dans {a.out} (vert : observé, rouge : simulé)")
+        return
     t, x, y = track(a.video, color, origin, ref, a.ref_length, a.tol)
     np.savetxt(a.out, np.c_[t, x, y], delimiter=",", header="t,x,y", comments="", fmt="%.5f")
     print(f"{len(t)} positions écrites dans {a.out} (de {t[0]:.2f} à {t[-1]:.2f} s)")

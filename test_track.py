@@ -6,7 +6,7 @@ import tempfile
 import numpy as np
 
 from realityloop import fit, simulate
-from track import track
+from track import overlay, probe, track
 
 W, H, FPS, SCALE, R = 640, 480, 60, 500, 8  # SCALE en px/m, R rayon de la bille en px
 ORIGIN = (350, 440)
@@ -34,12 +34,18 @@ def test_track_then_fit():
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "lancer.mp4")
         t_true, x_true, y_true = make_video(path)
-        t, x, y = track(path, np.array([255, 128, 0], np.float32), ORIGIN, (0, 0, SCALE, 0), 1.0)
-    inside = np.isin(np.round(t_true * FPS), np.round(t * FPS))
-    err = np.hypot(x - x_true[inside], y - y_true[inside])
-    assert np.max(err) < 0.003, np.max(err)  # moins de 1,5 px
-    p, _, _ = fit([(np.radians(25), t, x, y)], L, HEIGHT)
-    assert abs(p[0] - MU) < 0.005 and abs(p[1] - E) < 0.05, p
+        orange = np.array([255, 128, 0], np.float32)
+        t, x, y = track(path, orange, ORIGIN, (0, 0, SCALE, 0), 1.0)
+        inside = np.isin(np.round(t_true * FPS), np.round(t * FPS))
+        err = np.hypot(x - x_true[inside], y - y_true[inside])
+        assert np.max(err) < 0.003, np.max(err)  # moins de 1,5 px
+        p, _, _ = fit([(np.radians(25), t, x, y)], L, HEIGHT)
+        assert abs(p[0] - MU) < 0.005 and abs(p[1] - E) < 0.05, p
+
+        out = os.path.join(d, "superposition.mp4")
+        sim = (t, *simulate(t - p[-1], np.radians(25), p[0], p[1], L, HEIGHT))
+        overlay(path, out, orange, ORIGIN, (0, 0, SCALE, 0), 1.0, sim)
+        assert probe(out)[:2] == (W, H)
 
 
 if __name__ == "__main__":

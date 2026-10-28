@@ -122,6 +122,7 @@ def main():
     ap.add_argument("--cup", type=float, required=True, help="abscisse du centre du gobelet (m)")
     ap.add_argument("--cup-height", type=float, default=0.0, help="hauteur du bord du gobelet (m)")
     ap.add_argument("--tol", type=float, default=0.03, help="écart accepté, rayon du gobelet par défaut (m)")
+    ap.add_argument("--sim-out", help="CSV de la trajectoire simulée du dernier lancer, pour track.py --overlay")
     a = ap.parse_args()
     if a.length <= 0 or a.cup_height >= a.height:
         raise SystemExit("il faut --length > 0 et --cup-height < --height")
@@ -141,6 +142,10 @@ def main():
             print(f", observé {obs:.3f} m, écart {obs - m:+.3f} m -> {'OK' if ok else 'recalage'}")
 
     p, cov, rms = fit(throws, L, h)
+    if a.sim_out:
+        th, t, _, _ = throws[-1]
+        np.savetxt(a.sim_out, np.c_[t, *simulate(t - p[-1], th, p[0], p[1], L, h)],
+                   delimiter=",", header="t,x,y", comments="", fmt="%.5f")
     sd = np.sqrt(np.diag(cov))
     print(f"Calibration sur {len(throws)} lancer(s) : mu = {p[0]:.4f} ± {sd[0]:.4f}, "
           f"e = {p[1]:.3f} ± {sd[1]:.3f}, erreur de superposition RMS = {1000 * rms:.1f} mm")
