@@ -96,11 +96,15 @@ def predict(theta, p, cov, L, h, yc, n=500, seed=0):
     return xs.mean(), xs.std()
 
 
-def plan(cup, p, L, h, yc, lo=5.0, hi=60.0):
-    """Angle (rad) dont l'atterrissage prédit est le plus proche du gobelet."""
+def plan(cup, p, L, h, yc, lo=5.0, hi=60.0, near=None):
+    """Angle (rad) dont l'atterrissage prédit est le plus proche du gobelet.
+
+    Deux angles atteignent souvent le gobelet (tir tendu ou plongeant) : on garde le plus proche de `near`.
+    """
     angles = np.radians(np.arange(lo, hi, 0.05))
-    err = [abs(landing(a, p[0], L, h, yc) - cup) for a in angles]
-    return angles[int(np.nanargmin(err))]
+    err = np.array([abs(landing(a, p[0], L, h, yc) - cup) for a in angles])
+    ok = angles[err <= np.nanmin(err) + 0.002]
+    return ok[np.argmin(abs(ok - near))] if near is not None else angles[int(np.nanargmin(err))]
 
 
 def load(arg):
@@ -112,6 +116,28 @@ def load(arg):
     if data.shape[1] != 3 or len(data) < 10 or not np.all(np.diff(data[:, 0]) > 0):
         raise SystemExit(f"{path} : il faut au moins 10 lignes t,x,y avec t croissant")
     return np.radians(deg), data[:, 0], data[:, 1], data[:, 2]
+
+
+def loop(throws, L, h, cup, yc=0.0, tol=0.03):
+    """Une itération : vérifie le dernier lancer contre les précédents, recale sur tous, choisit l'angle suivant."""
+    r = {"check": None}
+    if len(throws) > 1:
+        th, _, x, y = throws[-1]
+        p, cov, _ = fit(throws[:-1], L, h)
+        m, sd = predict(th, p, cov, L, h, yc)
+        obs = observed_landing(x, y, yc)
+        r["check"] = dict(angle=float(np.degrees(th)), predicted=float(m), sd=float(sd),
+                          observed=None if obs is None else float(obs),
+                          ok=None if obs is None else bool(abs(obs - m) <= tol))
+    p, cov, rms = fit(throws, L, h)
+    sd = np.sqrt(np.diag(cov))
+    last, t = throws[-1][0], throws[-1][1]
+    th = plan(cup, p, L, h, yc, near=last)
+    m, s = predict(th, p, cov, L, h, yc)
+    r.update(n=len(throws), mu=float(p[0]), mu_sd=float(sd[0]), e=float(p[1]), e_sd=float(sd[1]), rms=float(rms),
+             angle=float(np.degrees(th)), landing=float(m), landing_sd=float(s), reachable=bool(abs(m - cup) <= tol),
+             sim=(t, *simulate(t - p[-1], last, p[0], p[1], L, h)))
+    return r
 
 
 def main():
@@ -126,34 +152,24 @@ def main():
     a = ap.parse_args()
     if a.length <= 0 or a.cup_height >= a.height:
         raise SystemExit("il faut --length > 0 et --cup-height < --height")
-    throws = [load(s) for s in a.throws]
-    L, h, yc = a.length, a.height, a.cup_height
+    r = loop([load(s) for s in a.throws], a.length, a.height, a.cup, a.cup_height, a.tol)
 
-    if len(throws) > 1:
-        th, _, x, y = throws[-1]
-        p, cov, _ = fit(throws[:-1], L, h)
-        m, sd = predict(th, p, cov, L, h, yc)
-        obs = observed_landing(x, y, yc)
-        print(f"Vérification du dernier lancer ({np.degrees(th):.1f}°) : prédit {m:.3f} ± {sd:.3f} m", end="")
-        if obs is None:
+    c = r["check"]
+    if c:
+        print(f"Vérification du dernier lancer ({c['angle']:.1f}°) : prédit {c['predicted']:.3f} ± {c['sd']:.3f} m",
+              end="")
+        if c["observed"] is None:
             print(", atterrissage non observé dans la vidéo")
         else:
-            ok = abs(obs - m) <= a.tol
-            print(f", observé {obs:.3f} m, écart {obs - m:+.3f} m -> {'OK' if ok else 'recalage'}")
-
-    p, cov, rms = fit(throws, L, h)
+            print(f", observé {c['observed']:.3f} m, écart {c['observed'] - c['predicted']:+.3f} m -> "
+                  f"{'OK' if c['ok'] else 'recalage'}")
     if a.sim_out:
-        th, t, _, _ = throws[-1]
-        np.savetxt(a.sim_out, np.c_[t, *simulate(t - p[-1], th, p[0], p[1], L, h)],
-                   delimiter=",", header="t,x,y", comments="", fmt="%.5f")
-    sd = np.sqrt(np.diag(cov))
-    print(f"Calibration sur {len(throws)} lancer(s) : mu = {p[0]:.4f} ± {sd[0]:.4f}, "
-          f"e = {p[1]:.3f} ± {sd[1]:.3f}, erreur de superposition RMS = {1000 * rms:.1f} mm")
-    th = plan(a.cup, p, L, h, yc)
-    m, s = predict(th, p, cov, L, h, yc)
-    print(f"Réglez la rampe à {np.degrees(th):.1f}° : atterrissage prédit {m:.3f} ± {s:.3f} m "
+        np.savetxt(a.sim_out, np.c_[r["sim"]], delimiter=",", header="t,x,y", comments="", fmt="%.5f")
+    print(f"Calibration sur {r['n']} lancer(s) : mu = {r['mu']:.4f} ± {r['mu_sd']:.4f}, "
+          f"e = {r['e']:.3f} ± {r['e_sd']:.3f}, erreur de superposition RMS = {1000 * r['rms']:.1f} mm")
+    print(f"Réglez la rampe à {r['angle']:.1f}° : atterrissage prédit {r['landing']:.3f} ± {r['landing_sd']:.3f} m "
           f"(gobelet à {a.cup:.3f} m)")
-    if abs(m - a.cup) > a.tol:
+    if not r["reachable"]:
         print("Attention : aucun angle entre 5° et 60° n'atteint le gobelet à la tolérance près.")
 
 

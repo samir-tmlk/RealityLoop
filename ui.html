@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RealityLoop</title>
+<style>
+:root {
+  --bg: #f4f5f8; --surface: #ffffff; --surface-2: #f8f9fb; --ink: #0f172a; --muted: #64748b; --line: #e3e7ee;
+  --accent: #4f46e5; --accent-2: #7c3aed; --accent-soft: #eef2ff; --on-accent: #ffffff;
+  --ok: #047857; --ok-soft: #ecfdf5; --warn: #b45309; --warn-soft: #fffbeb; --bad: #b91c1c; --bad-soft: #fef2f2;
+  --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 8px 24px rgba(15, 23, 42, .06);
+  --radius: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0d14; --surface: #121722; --surface-2: #171d2a; --ink: #e6e9f0; --muted: #94a0b4; --line: #232b3b;
+    --accent: #8b8cf8; --accent-2: #a78bfa; --accent-soft: #1e2140; --on-accent: #0a0d14;
+    --ok: #34d399; --ok-soft: #0f2a22; --warn: #fbbf24; --warn-soft: #2b2410; --bad: #f87171; --bad-soft: #2d1515;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0d14; --surface: #121722; --surface-2: #171d2a; --ink: #e6e9f0; --muted: #94a0b4; --line: #232b3b;
+  --accent: #8b8cf8; --accent-2: #a78bfa; --accent-soft: #1e2140; --on-accent: #0a0d14;
+  --ok: #34d399; --ok-soft: #0f2a22; --warn: #fbbf24; --warn-soft: #2b2410; --bad: #f87171; --bad-soft: #2d1515;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  max-width: 1320px; margin: 0 auto; padding: 22px 24px 8px;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo {
+  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+}
+.brand h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; }
+.brand p { margin: 0; color: var(--muted); font-size: 13px; }
+.loopline { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; flex-wrap: wrap; }
+.loopline span { padding: 3px 9px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); }
+.loopline span.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+main {
+  display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(340px, 1fr); gap: 20px;
+  max-width: 1320px; margin: 0 auto; padding: 16px 24px 40px;
+}
+@media (max-width: 960px) { main { grid-template-columns: 1fr; padding: 12px 16px 32px; } header { padding: 18px 16px 4px; } .loopline { display: none; } }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.stage { padding: 14px; position: sticky; top: 16px; align-self: start; }
+@media (max-width: 960px) { .stage { position: static; } }
+.tabs { display: flex; gap: 4px; padding: 4px; background: var(--surface-2); border-radius: 12px; width: fit-content; margin-bottom: 12px; }
+.tabs button {
+  border: 0; background: transparent; padding: 6px 14px; border-radius: 9px; cursor: pointer; color: var(--muted); font-weight: 550;
+}
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.tabs button:disabled { opacity: .45; cursor: not-allowed; }
+
+.drop {
+  border: 2px dashed var(--line); border-radius: 14px; min-height: 420px; display: grid; place-items: center;
+  text-align: center; padding: 32px; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop svg { color: var(--accent); }
+.drop h2 { margin: 12px 0 4px; font-size: 18px; }
+.drop p { margin: 0; color: var(--muted); max-width: 420px; }
+
+.canvas-wrap { position: relative; border-radius: 12px; overflow: hidden; background: #000; }
+canvas { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: none; }
+video { display: block; width: 100%; border-radius: 12px; background: #000; }
+.hintbar {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 12px;
+  background: var(--surface-2); color: var(--ink); font-size: 14px; min-height: 44px;
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px var(--surface); }
+.legend { display: flex; gap: 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+.panel { display: flex; flex-direction: column; gap: 16px; }
+.section { padding: 18px; }
+.section h3 {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-size: 15px; letter-spacing: -.005em;
+}
+.step {
+  width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 12.5px; font-weight: 700;
+  background: var(--accent-soft); color: var(--accent);
+}
+.step.done { background: var(--ok-soft); color: var(--ok); }
+.sub { color: var(--muted); font-size: 13px; margin: -6px 0 12px; }
+
+.throw {
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--surface-2);
+}
+.throw .n { font-weight: 700; color: var(--muted); font-size: 13px; width: 22px; }
+.throw .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.throw .name small { display: block; color: var(--muted); font-size: 12px; }
+.angle { display: flex; align-items: center; gap: 4px; }
+.angle input { width: 74px; text-align: right; }
+.x { border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 8px; width: 28px; height: 28px; font-size: 18px; line-height: 1; }
+.x:hover { background: var(--bad-soft); color: var(--bad); }
+
+input[type="number"], input[type="text"] {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 10px; min-width: 0;
+}
+input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.points { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.pt {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); cursor: pointer; text-align: left; font-size: 13.5px;
+}
+.pt:hover { border-color: var(--accent); }
+.pt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.pt .state { margin-left: auto; color: var(--muted); font-size: 12px; }
+.pt.set .state { color: var(--ok); }
+
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.field input { width: 100%; }
+.field.wide { grid-column: 1 / -1; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line);
+  background: var(--surface); padding: 9px 14px; border-radius: 11px; cursor: pointer; font-weight: 600; font-size: 14px;
+  transition: transform .05s, background .15s, border-color .15s;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary {
+  width: 100%; padding: 13px 16px; border: 0; color: #fff; font-size: 15px;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);  /* fixe : texte blanc lisible dans les deux thèmes */
+}
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: r .8s linear infinite; }
+@keyframes r { to { transform: rotate(1turn); } }
+
+.hero { padding: 20px 18px; border-radius: var(--radius); background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; }
+.hero .k { opacity: .85; font-size: 13px; }
+.hero .v { font-size: 40px; font-weight: 750; letter-spacing: -.02em; line-height: 1.1; margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
+.hero .s { opacity: .92; font-size: 14px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; font-size: 13px; font-weight: 600; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.bad { background: var(--bad-soft); color: var(--bad); }
+.check { margin-top: 12px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: 14px; }
+.check .line { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; color: var(--muted); }
+.check .line b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+.metric { padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.metric .k { color: var(--muted); font-size: 12.5px; }
+.metric .v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.metric .v small { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+details { margin-top: 12px; color: var(--muted); font-size: 13px; }
+details summary { cursor: pointer; }
+details table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+details td { padding: 3px 0; border-bottom: 1px solid var(--line); }
+details td:last-child { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 16px; border-radius: 12px; background: var(--bad-soft); color: var(--bad); border: 1px solid var(--bad);
+  box-shadow: var(--shadow); font-size: 14px; display: none; z-index: 10;
+}
+.empty { color: var(--muted); font-size: 14px; text-align: center; padding: 8px 0 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15"/><path d="M4 20v-5h5"/></svg>
+    </div>
+    <div><h1>RealityLoop</h1><p>Jumeau numérique calibré, vérifié dans le réel</p></div>
+  </div>
+  <div class="loopline" aria-label="Étapes de la boucle">
+    <span id="l-film">Filmer</span><span id="l-pts">Repérer</span><span id="l-fit">Calibrer</span><span id="l-act">Régler</span><span id="l-chk">Vérifier</span>
+  </div>
+</header>
+
+<main>
+  <section class="card stage" aria-label="Vidéo">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-pts" aria-selected="true">Repères</button>
+      <button role="tab" id="tab-ov" aria-selected="false" disabled>Superposition</button>
+    </div>
+    <div id="dropzone" class="drop" tabindex="0" role="button" aria-label="Choisir la vidéo du lancer de référence">
+      <div>
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>
+        <h2>Déposez la vidéo du lancer de référence</h2>
+        <p>Caméra fixe, de face, avec un repère d'échelle visible. La bille doit être immobile en haut de la rampe sur la première image.</p>
+      </div>
+    </div>
+    <div id="pts-view" hidden>
+      <div class="canvas-wrap"><canvas id="cv" aria-label="Première image de la vidéo : cliquez pour placer le repère actif"></canvas></div>
+      <div class="hintbar" aria-live="polite"><span class="dot" id="hint-dot"></span><span id="hint"></span></div>
+    </div>
+    <div id="ov-view" hidden>
+      <video id="ov" controls loop muted playsinline autoplay></video>
+      <div class="legend"><span><i style="background:#00ff00"></i>Observé</span><span><i style="background:#ff0000"></i>Jumeau numérique</span></div>
+    </div>
+  </section>
+
+  <div class="panel">
+    <section class="card section">
+      <h3><span class="step" id="s1">1</span>Lancers</h3>
+      <p class="sub">Le premier sert de référence. Ajoutez chaque nouveau lancer filmé avec la même caméra.</p>
+      <div id="throws"><div class="empty">Aucun lancer pour l'instant.</div></div>
+      <div class="row"><button class="btn" id="add">+ Ajouter un lancer</button></div>
+      <input type="file" id="file" accept="video/*" hidden>
+    </section>
+
+    <section class="card section">
+      <h3><span class="step" id="s2">2</span>Repères sur l'image</h3>
+      <p class="sub">Cliquez sur l'image pour placer chaque repère. Sélectionnez-en un pour le déplacer.</p>
+      <div class="points" id="points"></div>
+      <div class="fields">
+        <div class="field"><label for="reflen">Longueur du repère (m)</label><input type="number" id="reflen" min="0" step="0.01" value="1"></div>
+        <div class="field"><label for="tol">Tolérance (cm)</label><input type="number" id="tol" min="0.1" step="0.5" value="3"></div>
+        <div class="field wide"><label for="refdesc">Le repère, décrit pour Muse (en anglais)</label><input type="text" id="refdesc" value="a ruler lying on the table"></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="muse" disabled>✦ Placer avec Muse</button></div>
+    </section>
+
+    <button class="btn primary" id="go" disabled>Calibrer et prédire</button>
+
+    <section class="card section" id="results" hidden>
+      <h3><span class="step done">3</span>Résultat</h3>
+      <div class="hero">
+        <div class="k">Réglez la rampe à</div>
+        <div class="v" id="r-angle"></div>
+        <div class="s" id="r-landing"></div>
+      </div>
+      <div id="r-check"></div>
+      <div class="metrics" id="r-metrics"></div>
+      <details><summary>Géométrie lue sur l'image</summary><table id="r-geo"></table></details>
+      <div class="row" style="margin-top:14px"><button class="btn" id="next" style="width:100%">Filmer ce réglage et ajouter le lancer</button></div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast" role="alert"></div>
+
+<script>
+const POINTS = [
+  { k: 'ball', label: 'Bille', hint: 'Cliquez au centre de la bille, immobile en haut de la rampe.', color: '#f97316' },
+  { k: 'ramp_end', label: 'Bas de rampe', hint: 'Cliquez sur l’extrémité basse de la surface de roulement.', color: '#3b82f6' },
+  { k: 'floor', label: 'Sol', hint: 'Cliquez sur le sol d’atterrissage, à la verticale du bas de la rampe.', color: '#a855f7' },
+  { k: 'refA', label: 'Repère, début', hint: 'Cliquez sur une extrémité du repère d’échelle.', color: '#eab308' },
+  { k: 'refB', label: 'Repère, fin', hint: 'Cliquez sur l’autre extrémité du repère d’échelle.', color: '#eab308' },
+  { k: 'cup', label: 'Gobelet', hint: 'Cliquez au centre de l’ouverture du gobelet.', color: '#06b6d4' },
+];
+const S = { throws: [], pts: {}, active: 'ball', img: null, w: 0, h: 0, result: null, mouse: null, busy: false };
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+const fmt = (v, d = 3) => v.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 7000);
+}
+
+async function api(path, body, raw) {
+  const r = await fetch(path, { method: 'POST', body: raw ? body : JSON.stringify(body) });
+  const j = await r.json().catch(() => ({ error: 'réponse illisible du serveur' }));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+function busy(btn, label) {
+  const old = btn.innerHTML; btn.disabled = true; S.busy = true;
+  btn.innerHTML = `<span class="spin" aria-hidden="true"></span>${label}`;
+  return () => { btn.innerHTML = old; S.busy = false; refresh(); };
+}
+
+// ---- lancers ----
+async function addVideo(file) {
+  if (!file || S.busy) return;
+  const done = busy($('add'), 'Lecture de la vidéo…');
+  try {
+    const v = await api('/api/upload', file, true);
+    const angle = S.throws.length ? (S.result ? +S.result.result.angle.toFixed(1) : '') : '';
+    S.throws.push({ ...v, name: file.name, angle });
+    if (S.throws.length === 1) await loadFrame();
+  } catch (e) { toast(e.message); }
+  done();
+}
+
+function loadFrame() {
+  const t = S.throws[0];
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => { S.img = img; S.w = t.w; S.h = t.h; showTab('pts'); draw(); res(); };
+    img.src = t.frame + '?' + t.id;
+  });
+}
+
+function renderThrows() {
+  const el = $('throws');
+  if (!S.throws.length) { el.innerHTML = '<div class="empty">Aucun lancer pour l’instant.</div>'; return; }
+  el.innerHTML = '';
+  S.throws.forEach((t, i) => {
+    const row = document.createElement('div'); row.className = 'throw';
+    const auto = i === 0 ? 'placeholder="auto"' : 'placeholder="requis"';
+    row.innerHTML = `<span class="n">#${i + 1}</span>
+      <div class="name" title="${esc(t.name)}">${esc(t.name)}<small>${i === 0 ? 'référence · ' : ''}${t.w}×${t.h} · ${Math.round(t.fps)} i/s</small></div>
+      <label class="angle"><span class="sr">Angle de la rampe du lancer ${i + 1}</span><input type="number" min="1" max="89" step="0.1" ${auto} value="${t.angle}">°</label>
+      <button class="x" aria-label="Retirer le lancer ${i + 1}" title="Retirer (si le système a changé)">×</button>`;
+    row.querySelector('input').oninput = e => { t.angle = e.target.value; refresh(); };
+    row.querySelector('.x').onclick = () => {
+      S.throws.splice(i, 1);
+      if (i === 0) { S.throws.length ? loadFrame() : (S.img = null, showTab('none')); }
+      refresh();
+    };
+    el.appendChild(row);
+  });
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ---- repères ----
+function renderPoints() {
+  const el = $('points'); el.innerHTML = '';
+  for (const p of POINTS) {
+    const b = document.createElement('button');
+    b.className = 'pt' + (S.pts[p.k] ? ' set' : '');
+    b.setAttribute('aria-pressed', S.active === p.k);
+    b.innerHTML = `<span class="dot" style="background:${p.color}"></span>${p.label}<span class="state">${S.pts[p.k] ? '✓' : 'à placer'}</span>`;
+    b.onclick = () => { S.active = p.k; refresh(); };
+    el.appendChild(b);
+  }
+  const a = POINTS.find(p => p.k === S.active);
+  $('hint-dot').style.background = a ? a.color : 'var(--ok)';
+  $('hint').textContent = a ? a.hint : 'Tous les repères sont placés. Sélectionnez-en un pour le corriger.';
+}
+
+function draw() {
+  if (!S.img) return;
+  const dpr = window.devicePixelRatio || 1, cssW = cv.parentElement.clientWidth;
+  cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssW * S.h / S.w * dpr);
+  const k = cv.width / S.w;
+  ctx.drawImage(S.img, 0, 0, cv.width, cv.height);
+  const { refA, refB } = S.pts;
+  if (refA && refB) {
+    ctx.strokeStyle = '#eab308'; ctx.lineWidth = 2 * dpr; ctx.setLineDash([6 * dpr, 4 * dpr]);
+    ctx.beginPath(); ctx.moveTo(refA[0] * k, refA[1] * k); ctx.lineTo(refB[0] * k, refB[1] * k); ctx.stroke(); ctx.setLineDash([]);
+  }
+  for (const p of POINTS) {
+    const v = S.pts[p.k]; if (!v) continue;
+    const x = v[0] * k, y = v[1] * k, r = 7 * dpr;
+    ctx.beginPath(); ctx.arc(x, y, r + 2.5 * dpr, 0, 7); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fillStyle = p.color; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 2 * dpr, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.font = `600 ${12 * dpr}px system-ui, sans-serif`;
+    const tw = ctx.measureText(p.label).width, lx = Math.min(x + 12 * dpr, cv.width - tw - 10 * dpr);
+    const ly = y < 24 * dpr ? y + 24 * dpr : y - 12 * dpr;  // sous le point s'il touche le haut de l'image
+    ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(lx - 5 * dpr, ly - 13 * dpr, tw + 10 * dpr, 18 * dpr);
+    ctx.fillStyle = '#fff'; ctx.fillText(p.label, lx, ly);
+  }
+  // loupe : agrandit la zone sous le curseur pour viser au pixel près
+  if (S.mouse && S.active) {
+    const [mx, my] = S.mouse, R = 64 * dpr, z = 4, cx = mx * k < cv.width / 2 ? cv.width - R - 12 * dpr : R + 12 * dpr, cy = R + 12 * dpr;
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.clip();
+    const s = R * 2 / k / z;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(S.img, mx - s / 2, my - s / 2, s, s, cx - R, cy - R, 2 * R, 2 * R);
+    ctx.strokeStyle = POINTS.find(p => p.k === S.active).color; ctx.lineWidth = 1.5 * dpr;
+    ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3 * dpr; ctx.stroke();
+  }
+}
+
+function imgPos(e) {
+  const r = cv.getBoundingClientRect();
+  return [Math.min(Math.max((e.clientX - r.left) / r.width * S.w, 0), S.w - 1), Math.min(Math.max((e.clientY - r.top) / r.height * S.h, 0), S.h - 1)];
+}
+cv.addEventListener('pointermove', e => { S.mouse = imgPos(e); draw(); });
+cv.addEventListener('pointerleave', () => { S.mouse = null; draw(); });
+cv.addEventListener('click', e => {
+  if (!S.active) return;
+  S.pts[S.active] = imgPos(e).map(v => Math.round(v * 10) / 10);
+  const next = POINTS.find(p => !S.pts[p.k]);
+  S.active = next ? next.k : null;
+  refresh();
+});
+window.addEventListener('resize', draw);
+
+// ---- onglets ----
+function showTab(which) {
+  $('dropzone').hidden = which !== 'none';
+  $('pts-view').hidden = which !== 'pts';
+  $('ov-view').hidden = which !== 'ov';
+  $('tab-pts').setAttribute('aria-selected', which !== 'ov');
+  $('tab-ov').setAttribute('aria-selected', which === 'ov');
+  if (which === 'pts') requestAnimationFrame(draw);
+}
+$('tab-pts').onclick = () => showTab(S.img ? 'pts' : 'none');
+$('tab-ov').onclick = () => showTab('ov');
+
+// ---- actions ----
+const ready = () => S.throws.length && POINTS.every(p => S.pts[p.k]) && S.throws.slice(1).every(t => t.angle !== '' && +t.angle > 0);
+function refresh() {
+  renderThrows(); renderPoints(); draw();
+  const allPts = POINTS.every(p => S.pts[p.k]);
+  $('s1').className = 'step' + (S.throws.length ? ' done' : '');
+  $('s2').className = 'step' + (allPts ? ' done' : '');
+  $('go').disabled = S.busy || !ready();
+  $('muse').disabled = S.busy || !S.throws.length;
+  $('add').disabled = S.busy;
+  $('tab-ov').disabled = !S.result;
+  $('l-film').className = S.throws.length ? 'on' : '';
+  $('l-pts').className = allPts ? 'on' : '';
+  for (const id of ['l-fit', 'l-act']) $(id).className = S.result ? 'on' : '';
+  $('l-chk').className = S.result && S.result.result.check ? 'on' : '';
+}
+
+$('add').onclick = () => $('file').click();
+$('file').onchange = e => { addVideo(e.target.files[0]); e.target.value = ''; };
+const dz = $('dropzone');
+dz.onclick = () => $('file').click();
+dz.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } };
+for (const ev of ['dragenter', 'dragover']) document.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); });
+for (const ev of ['dragleave', 'drop']) document.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('over'); });
+document.addEventListener('drop', e => addVideo(e.dataTransfer.files[0]));
+
+$('muse').onclick = async () => {
+  const done = busy($('muse'), 'Muse analyse l’image (1 à 2 min)…');
+  try {
+    const { points: p } = await api('/api/muse', { id: S.throws[0].id, ref_desc: $('refdesc').value });
+    S.pts = { ball: p.ball, ramp_end: p.ramp_end, floor: p.floor, refA: p.ref.slice(0, 2), refB: p.ref.slice(2), cup: p.cup };
+    S.active = null; showTab('pts');
+  } catch (e) { toast('Muse : ' + e.message + ' Placez les repères à la main.'); }
+  done();
+};
+
+$('go').onclick = async () => {
+  const done = busy($('go'), 'Suivi de la bille et calibration…');
+  try {
+    const P = S.pts;
+    S.result = await api('/api/run', {
+      points: { ball: P.ball, ramp_end: P.ramp_end, floor: P.floor, ref: [...P.refA, ...P.refB], cup: P.cup },
+      ref_length: +$('reflen').value, tol: +$('tol').value / 100,
+      throws: S.throws.map(t => ({ id: t.id, angle: t.angle === '' ? null : +t.angle })),
+    });
+    S.result.angles.forEach((a, i) => { if (S.throws[i].angle === '') S.throws[i].angle = +a.toFixed(1); });
+    renderResult();
+    $('ov').src = S.result.overlay + '?' + Date.now();
+    showTab('ov');
+    $('results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) { toast(e.message); }
+  done();
+};
+
+$('next').onclick = () => $('file').click();
+
+function renderResult() {
+  const { result: r, geometry: g } = S.result;
+  $('results').hidden = false;
+  $('r-angle').textContent = fmt(r.angle, 1) + ' °';
+  $('r-landing').textContent = `Atterrissage prédit à ${fmt(r.landing)} m ± ${fmt(r.landing_sd * 1000, 1)} mm · gobelet à ${fmt(g.cup)} m`;
+  const c = r.check;
+  let html = '';
+  if (!r.reachable) html += `<div class="check"><span class="badge warn">Hors de portée</span> Aucun angle entre 5° et 60° n’atteint le gobelet : rapprochez-le ou surélevez la rampe.</div>`;
+  if (c) {
+    const badge = c.ok === null ? '<span class="badge warn">Atterrissage non vu</span>' : c.ok ? '<span class="badge ok">✓ Prédiction confirmée</span>' : '<span class="badge bad">↻ Écart : recalage effectué</span>';
+    html += `<div class="check">${badge} <span style="color:var(--muted)">dernier lancer, ${fmt(c.angle, 1)}°</span>
+      <div class="line">Prédit par les lancers précédents<b>${fmt(c.predicted)} m ± ${fmt(c.sd * 1000, 1)} mm</b></div>
+      <div class="line">Observé<b>${c.observed === null ? '—' : fmt(c.observed) + ' m'}</b></div>
+      ${c.observed === null ? '' : `<div class="line">Écart<b>${(c.observed - c.predicted >= 0 ? '+' : '') + fmt((c.observed - c.predicted) * 100, 1)} cm</b></div>`}</div>`;
+  }
+  $('r-check').innerHTML = html;
+  $('r-metrics').innerHTML = [
+    ['Frottement de roulement μ', fmt(r.mu, 4), '± ' + fmt(r.mu_sd, 4)],
+    ['Coefficient de rebond e', fmt(r.e, 3), '± ' + fmt(r.e_sd, 3)],
+    ['Erreur de superposition', fmt(r.rms * 1000, 1), 'mm RMS'],
+    ['Lancers calibrés', String(r.n), ''],
+  ].map(([k, v, s]) => `<div class="metric"><div class="k">${k}</div><div class="v">${v} <small>${s}</small></div></div>`).join('');
+  $('r-geo').innerHTML = [
+    ['Distance parcourue sur la rampe', fmt(g.length) + ' m'], ['Hauteur du bas de rampe', fmt(g.height) + ' m'],
+    ['Angle du lancer de référence', fmt(S.result.angles[0], 1) + ' °'], ['Distance du gobelet', fmt(g.cup) + ' m'],
+    ['Hauteur du bord du gobelet', fmt(g.cup_height) + ' m'], ['Couleur suivie', g.color],
+  ].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+}
+
+refresh();
+</script>
+</body>
+</html>

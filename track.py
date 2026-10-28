@@ -87,7 +87,7 @@ def overlay(path, out, color, origin, ref, ref_length, sim, tol=60):
     sim_px = origin[0] + sign * sx * scale, origin[1] - sy * scale - rm
     w, h, fps = probe(path)
     p = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
-                          "-r", str(fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", out],
+                          "-r", str(fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out],
                          stdin=subprocess.PIPE)
     for i, f in enumerate(frames(path, w, h)):
         f, now = f.copy(), i / fps + 1e-6

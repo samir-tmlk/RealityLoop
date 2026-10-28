@@ -21,15 +21,28 @@ video ──► tracking ──► calibration ──► control ──► real 
 | Control (ramp angle that hits the cup) | ✅ |
 | Verification and recalibration | ✅ |
 | Simulation / video overlay | ✅ |
-| SAM 3.1, Muse Spark, Muse Voice Transcribe | ❌ not wired in yet |
-| Web interface | ❌ command line only |
+| Scene reading with Muse (`muse exec --image`) | 🧪 `scene.py` and the GUI button; only ball location checked so far (synthetic frame, under 1 px off) |
+| SAM 3.1, Muse Voice Transcribe | ❌ not wired in yet |
+| Graphical interface | ✅ local web app (`app.py`) |
 | Benchmark on real videos | ❌ tests use synthetic videos only |
 
 ## Install
 
 Python 3.10+, `pip install -r requirements.txt`, and `ffmpeg` / `ffprobe` on the `PATH`.
 
-## Usage
+## Graphical interface
+
+```sh
+py app.py
+```
+
+Opens http://127.0.0.1:8765. Drop the reference video, click the six landmarks on the first frame (a magnifier
+helps aim; **✦ Placer avec Muse** places them automatically, in 1 to 2 minutes), then **Calibrer et prédire**.
+The page shows the recommended ramp angle, the fitted parameters and the simulation overlaid on the video.
+Film the next throw at that angle and add it: the page checks the prediction and recalibrates.
+Uploaded videos stay on your machine, in `runs/`.
+
+## Command line
 
 **1. Film.** Fixed camera on a tripod, facing the plane of motion, level. Bright ball whose colour
 appears nowhere else in the frame. A scale reference of known length on the table.
@@ -107,8 +120,10 @@ radius) the agent recalibrates.
 ```sh
 py test_realityloop.py
 py test_track.py
+py test_app.py
 ```
 
 They check that calibration recovers the true parameters, that the chosen
-angle hits the cup within 1 cm, that a new throw is predicted within 1 cm, and that tracking a rendered
-H.264 video stays within 3 mm of the truth.
+angle hits the cup within 1 cm, that a new throw is predicted within 1 cm, that tracking a rendered
+H.264 video stays within 3 mm of the truth, and that the GUI's API goes from an uploaded video to a
+recommended angle.
